@@ -1,0 +1,280 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{mathptmx}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage[hidelinks]{hyperref}
+
+\captionsetup{font=small,labelfont=bf}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\renewcommand{\arraystretch}{1.15}
+
+\title{\textbf{Robust Deep Learning for Intrusion Detection in the\\ Internet of Things: A Comparative Study of Focal Loss and\\ Federated Continual Learning, with a \emph{Federated Focal\\ Continual Learning} Proposal}}
+
+\author{
+Mohamed Ait Lhouari \quad Imad Baghdad \quad Abderrahman Benider \quad Youness Tourabi\\[4pt]
+\normalsize École Centrale Casablanca, Scientific Project\\
+\normalsize Supervisor: Mme Kawtar Zerhouni
+}
+\date{December 2025}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+Intrusion detection in the Internet of Things (IoT) faces two obstacles that are usually addressed in isolation. The first is structural: network traffic is severely imbalanced, with an overwhelming majority of benign flows for a handful of attacks, which biases supervised learning toward the majority class. The second is temporal and architectural: traffic distributions drift over time as new attacks appear, while IoT deployments are inherently distributed, so static and centralized models become inefficient. This paper studies and compares two representative deep learning approaches that each confront one of these obstacles. We first analyze the focal loss formulation of Dina et al. (2023), which mitigates class imbalance at the level of the loss function, and we expose its main limitation, namely a static and centralized design that ignores the non-stationarity of real traffic. We then present the multi-agent adaptive framework of Soltani et al. (2024), which combines federated learning, continual learning, and sequential packet labeling to remain adaptable under concept drift and zero-day attacks. A comparative discussion shows that the two approaches are orthogonal rather than competing. From this observation we propose \emph{Federated Focal Continual Learning} (FFCL), a framework that integrates the focal loss into the local training objective of the federated continual agents, so that rare local attacks are learned correctly before being propagated to the global model. The proposal is conceptual; all quantitative results reported here are those of the cited works, and the empirical validation of FFCL is left to future work.
+
+\vspace{6pt}
+\noindent\textbf{Keywords:} intrusion detection; Internet of Things; deep learning; focal loss; class imbalance; continual learning; federated learning; catastrophic forgetting; concept drift.
+\end{abstract}
+
+\section{Introduction}
+
+The Internet of Things (IoT) is expanding rapidly and now reaches critical sectors such as healthcare, Industry~4.0, and intelligent transportation. This massive connectivity and heterogeneity expose IoT networks to increasingly sophisticated cyberattacks. Signature-based intrusion detection systems (IDS) become obsolete in the face of fast-evolving threats, and deep learning (DL) has emerged as a natural alternative because it extracts discriminative features automatically and detects anomalies without a hand-crafted signature process.
+
+The application of DL to the IoT, however, meets two major obstacles. The first is structural: traffic data are intrinsically imbalanced, with an overwhelming majority of normal flows for a few attacks, which biases learning. The second is temporal and architectural: network traffic evolves continuously (concept drift), and IoT architectures are distributed by nature, which makes static and centralized models ineffective in the long run.
+
+This paper is organized around the analysis of two scientific works that address these problems. We begin with the synthesis of Dina et al., who tackle class imbalance through the focal loss function. After identifying the limits of this static approach, we present the work of Soltani et al., who propose a dynamic multi-agent architecture. A final discussion highlights the complementarity of the two approaches and derives an original engineering proposal, \emph{Federated Focal Continual Learning}. The contribution of this study is therefore twofold: a critical and comparative reading of two complementary approaches, and an original framework that addresses imbalance and drift jointly. The study is a critical analysis and a design proposal; it does not report an experimental implementation of the proposed framework.
+
+\section{Article 1: Deep Learning with Focal Loss}
+
+\subsection{Context and Problem}
+
+The article \emph{``A deep learning approach for intrusion detection in Internet of Things using focal loss function''} (Dina et al., 2023) [1] addresses a fundamental problem of supervised learning applied to cybersecurity: \emph{class imbalance}. In real datasets such as Bot-IoT or WUSTL-IIoT, the ratio between rare attacks (minority classes) and normal traffic or massive attacks such as DoS (majority classes) can reach $1{:}1000$. Traditional loss functions such as cross-entropy tend to favor the majority class, because the model minimizes the global error and neglects the rare but critical examples. Classical resampling methods (oversampling and undersampling) and synthetic data generation (GANs) introduce a risk of overfitting or demand prohibitive computational resources for the IoT.
+
+\subsection{Proposed Methodology}
+
+The authors replace the standard loss by the \emph{focal loss} (FL), originally designed for object detection in computer vision [3]. The focal loss modifies cross-entropy to assign more weight to examples that are hard to classify, which are typically the minority classes. It is defined as
+\begin{equation}
+\mathrm{FL}(p_t) = -\,\alpha_t\,(1-p_t)^{\gamma}\,\log(p_t),
+\end{equation}
+where $p_t$ is the probability estimated by the model for the correct class, $(1-p_t)^{\gamma}$ is the modulating factor (if $p_t$ is close to $1$, that is, an easy example, the factor tends to $0$ and reduces the contribution of that example to the loss), $\gamma$ is the focusing parameter that controls how strongly easy examples are down-weighted, and $\alpha_t$ is a balancing factor that accounts for class frequencies.
+
+The study implements this loss on two neural network architectures, a dense network (FNN) and a one-dimensional convolutional network (CNN), evaluated on three heterogeneous datasets: Bot-IoT, WUSTL-IIoT-2021, and WUSTL-EHMS-2020.
+
+\subsection{Main Results}
+
+The experiments show a clear superiority of the \emph{CNN-Focal} approach over methods based on cross-entropy or Dice loss. On the Bot-IoT dataset, the approach improves the Matthews correlation coefficient (MCC), a metric robust to imbalance, by about $60\%$ relative to a standard CNN model. The approach also outperforms resampling (SMOTE) and synthetic generation (CTGAN) in precision and F1 score, and a t-SNE visualization shows a better separation of minority classes in the latent space.
+
+\section{Critical Analysis and Transition}
+
+\subsection{Limits of the Focal Loss Approach}
+
+Despite the effectiveness of the method of Dina et al. for handling imbalance, our critical analysis reveals several intrinsic limits that hinder a real industrial deployment.
+
+\begin{enumerate}[leftmargin=1.4em,itemsep=2pt]
+\item \textbf{Static (offline) approach.} Training is performed on fixed datasets. The model cannot adapt to new attacks (zero-day attacks) without a complete retraining, which is costly and slow.
+\item \textbf{Centralized architecture.} The article assumes that all data are aggregated on a central server for training. In a massive IoT network this raises problems of bandwidth, latency, and above all data privacy.
+\item \textbf{No handling of concept drift.} The behavior of network traffic, both normal and malicious, changes over time. A model trained with focal loss at instant $t$ becomes obsolete at $t+1$ if the data distribution changes, and the loss function alone cannot correct this.
+\item \textbf{Full-flow detection.} The CNN and FNN models often require observing the complete flow or a fixed window, which can delay detection compared to a packet-by-packet analysis.
+\end{enumerate}
+
+\subsection{Justification of the Second Article}
+
+To overcome these limits we selected the article \emph{``A multi-agent adaptive deep learning framework for online intrusion detection''} of Soltani et al. (2024) [2]. The choice is motivated by a clear complementarity with the first article. Where Article~1 optimizes \emph{learning on hard data} (a static problem), Article~2 optimizes the \emph{life cycle of the model} (a dynamic problem). It answers the centralization problem with a multi-agent, federated architecture, and the obsolescence problem with continual learning.
+
+\section{Article 2: Adaptive Multi-Agent Framework}
+
+\subsection{Context and Objectives}
+
+Soltani et al. (2024) propose a framework designed for real production environments. The authors identify three major challenges that are not resolved by classical approaches such as Article~1: continuous adaptation to new threats (concept drift), the need for a distributed architecture to handle network big data, and early detection.
+
+\subsection{Proposed Architecture}
+
+The framework relies on three technological pillars.
+
+\textbf{Multi-agent architecture and federated learning.} Instead of a monolithic IDS, the system deploys several agents (sensors) distributed across the network. Each agent trains a local model on its own traffic, which preserves confidentiality. Agents share their knowledge with a central coordinator through knowledge distillation and asynchronous federated learning [4], which builds a collective intelligence without ever transferring raw data.
+
+\textbf{Continual learning.} To avoid catastrophic forgetting when a model learns a new attack, the authors use an expansion and regularization strategy: the network expands dynamically by adding neurons to learn the new task, and a regularization based on the Fisher information matrix (Elastic Weight Consolidation, EWC [5]) prevents excessive modification of the weights that are important for the previous tasks.
+
+\textbf{Sequential packet labeling.} The use of LSTM (Long Short-Term Memory) networks allows the traffic to be analyzed packet by packet, updating the attack probability at each new packet and enabling detection before the end of the flow.
+
+\subsection{Key Methodologies and Formulas}
+
+\textbf{Phase 1: expansion and training of new nodes.} The framework first trains only the newly added weights while freezing the previous ones,
+\begin{equation}
+\min_{W_{\mathrm{Add}}} \; \mathcal{L}\!\left(W_{\mathrm{Add}} \mid W_{\mathrm{Prv}},\, D_{\mathrm{train}}\right),
+\end{equation}
+where $W_{\mathrm{Add}}$ are the weights of the newly added nodes, $W_{\mathrm{Prv}}$ the frozen weights of the previous model, and $D_{\mathrm{train}}$ the data of the new attack.
+
+\textbf{Phase 2: full regularization.} The expanded network is then refined under three regularization terms,
+\begin{equation}
+\begin{aligned}
+\min_{W_{\mathrm{Exp}}} \;\; & \mathcal{L}\!\left(W_{\mathrm{Exp}} \mid D_{\mathrm{train}}\right)
++ \lambda_1 \sum_i F^{\mathrm{Prv}}_{ii}\left(\theta^{\mathrm{Exp}}_i - \theta^{\mathrm{Prv}}_i\right)^2 \\[2pt]
+& + \lambda_2 \left\lVert [\,W_{\mathrm{Exp}};\, W_{\mathrm{Prv}}\,] \right\rVert_{2,1}
++ \lambda_3 \left\lVert W_{\mathrm{Add}} \right\rVert_1 ,
+\end{aligned}
+\end{equation}
+where the Fisher term protects against catastrophic forgetting, the $\ell_{2,1}$ term encourages shared features across tasks (multi-task learning), and the $\ell_1$ term enforces sparsity of the new task-specific nodes.
+
+\textbf{Fisher information matrix.} The importance of each weight for the previous tasks is measured by
+\begin{equation}
+F_{ii} = \frac{1}{|S|} \sum_{(x,y)\in S} \left( \frac{\partial \log p(Y=y \mid x,\theta)}{\partial \theta_i} \right)^{2}.
+\end{equation}
+A high $F_{ii}$ means that modifying weight $\theta_i$ would significantly degrade the performance on the old attacks.
+
+\textbf{Distillation function.} The central model is updated by combining a hard-label loss, a soft-label distillation loss, and a Fisher regularization toward the initial parameters,
+\begin{equation}
+f_{\mathrm{dist}}(W_{\mathrm{main}}) = \mathcal{L}(W_{\mathrm{main}}; D_\ell) + \mathcal{L}_{\mathrm{kd}}(W_{\mathrm{main}}; Z_\ell) + \lambda \sum_i F^{\mathrm{main}}_{ii}\left(\theta^{\mathrm{main}}_i - \theta^{\mathrm{init}}_i\right)^{2}.
+\end{equation}
+
+\textbf{Asynchronous update of the main model.} The coordinator aggregates the gradients of the agents that have transmitted an update,
+\begin{equation}
+W'_{\mathrm{main}} = W_{\mathrm{main}} - \mu \sum_{\ell \in M} \nabla_\ell f_{\mathrm{dist}}(W_{\mathrm{main}}),
+\end{equation}
+where $M$ is the set of agents that sent a gradient and $\mu$ the learning rate.
+
+\textbf{Aggregation of the Fisher matrix.} The Fisher matrix of the main model is updated as a convex combination,
+\begin{equation}
+F'_{\mathrm{main}} = \alpha\, F_{\mathrm{main}} + (1-\alpha)\, F_{\mathrm{agent}}, \qquad \alpha \approx 0.9 .
+\end{equation}
+
+\subsection{Evaluated Architectures}
+
+Both architectures share a common configuration: an input flow matrix of $200$ bytes $\times\,100$ packets ($20{,}000$ dimensions), ReLU activations in the intermediate layers and softmax at the output, dropout of $0.2$, the Adam optimizer, and a binary output (benign or attack). Their structural differences are summarized in Table~\ref{tab:arch}.
+
+\begin{table}[h]
+\centering
+\caption{Configuration of the two evaluated architectures.}
+\label{tab:arch}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Component} & \textbf{CNN-based} & \textbf{LSTM-based} \\
+\midrule
+Base part & 2 Conv2D (8 then 16 filters, $3{\times}3$) & 1 LSTM many-to-many (1024 cells) \\
+Dense part & 256-128-64-2 & 512-256-128-64-2 \\
+Input & full flow matrix ($200{\times}100$) & sequence of 100 packets (200-D) \\
+Output & 1 probability per flow & 100 probabilities (1 per packet) \\
+Memory (init $\to$ ext.) & 300 $\to$ 320 MB & 20 $\to$ 23 MB \\
+Init / update time & 7 / 6 min & 13 / 2 min \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Experimental Results}
+
+The framework is evaluated on the CIC-IDS2017 and CSE-CIC-IDS2018 datasets, covering attacks such as DDoS, botnet, SSH and FTP brute force, SQL injection, XSS, Heartbleed, and DoS variants, with a $64/16/20$ split for training, validation, and test, on an Intel Core i7-6900K with 32~GB of RAM and a GeForce GTX~1080~Ti, using Keras with a TensorFlow backend.
+
+The adaptation results (Table~\ref{tab:adapt}) show that with only $128$ new flows the CNN raises its zero-day detection rate from about $0.33$ to more than $95\%$, while preserving more than $98\%$ on previously known attacks, which confirms the absence of catastrophic forgetting. The LSTM adapts slightly less accurately but updates three times faster and is more than an order of magnitude lighter in memory.
+
+\begin{table}[h]
+\centering
+\caption{Adaptation to concept drift with 128 new flows.}
+\label{tab:adapt}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Metric} & \textbf{CNN} & \textbf{LSTM} \\
+\midrule
+Detection rate (zero-day, before) & $\sim 0.33$ & $\sim 0.31$ \\
+Detection rate (zero-day, after) & $>95\%$ & 80--90\% \\
+Detection rate (known, after) & $>98\%$ & $>90\%$ \\
+Update time & 6 min & 2 min \\
+Extended memory & 320 MB & 23 MB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The federated results (Table~\ref{tab:fed}) confirm that aggregating the knowledge of agents that each learned a different attack sharply improves detection of previously unknown attacks while retaining the known ones, again with no catastrophic forgetting.
+
+\begin{table}[h]
+\centering
+\caption{Multi-agent (federated) performance.}
+\label{tab:fed}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Architecture} & \textbf{Unknowns-before} & \textbf{Unknowns-after} & \textbf{Knowns-after} \\
+\midrule
+CNN (CIC-2017) & 0.49 & \textbf{0.95} & 0.95 \\
+CNN (CIC-2018) & 0.49 & \textbf{0.98} & 0.99 \\
+LSTM (CIC-2017) & 0.60 & \textbf{0.75} & 0.91 \\
+LSTM (CIC-2018) & 0.51 & \textbf{0.80} & 0.98 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Finally, the early-detection results (Table~\ref{tab:early}) show that the LSTM reaches a reliable decision after only $15$ packets, whereas the CNN waits for the complete flow, which makes the LSTM six to seven times faster for detection and allows an attack to be stopped before its completion.
+
+\begin{table}[h]
+\centering
+\caption{Progressive (early) detection with the LSTM.}
+\label{tab:early}
+\small
+\begin{tabular}{@{}ccl@{}}
+\toprule
+\textbf{Packets} & \textbf{Detection rate} & \textbf{Interpretation} \\
+\midrule
+5 & $\sim 65\%$ & weak detection \\
+10 & $\sim 75\%$ & acceptable detection \\
+\textbf{15} & $\boldsymbol{>80\%}$ & \textbf{reliable detection} \\
+50 & $\sim 92\%$ & strong confidence \\
+100 & $>95\%$ & maximal certainty \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Comparative Discussion and Proposal}
+
+\subsection{Static versus Dynamic}
+
+Crossing the lessons of the two articles, rather than juxtaposing their results, reveals a clean division of labor (Table~\ref{tab:compare}). The first approach maximizes the detection of rare attacks within a fixed batch but ages quickly; the second sustains the system against novelty but is more complex and costly to deploy.
+
+\begin{table}[h]
+\centering
+\caption{Synthetic comparison of the two approaches.}
+\label{tab:compare}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Criterion} & \textbf{Dina et al.} & \textbf{Soltani et al.} \\
+\midrule
+Data handling & class imbalance (focal loss) & temporal evolution (drift) \\
+Architecture & centralized & distributed (federated) \\
+Training & offline (static dataset) & online (continual) \\
+Strength & rare-attack detection in a batch & durability against novelty \\
+Weakness & rapid obsolescence & complexity, compute cost \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{An Original Proposal: Federated Focal Continual Learning}
+
+The joint analysis of the two articles leads us to an original engineering proposal. The two approaches are not mutually exclusive but \emph{orthogonal}. A limitation of Article~2 (Soltani) is that it uses a standard loss (cross-entropy) during the local training phases of the agents. Yet if a local agent faces highly imbalanced traffic, which is likely in an IoT subnetwork, its learning will be biased before it is even shared with the coordinator.
+
+We therefore propose to integrate the focal loss of Article~1 into the local cost function of the agents of the framework of Article~2. Concretely, the local objective of Phase~2 is rewritten by substituting the cross-entropy loss with the focal loss,
+\begin{equation}
+\begin{aligned}
+\min_{W_{\mathrm{Exp}}} \;\; & \mathrm{FL}\!\left(W_{\mathrm{Exp}} \mid D^{\mathrm{local}}_{\mathrm{train}}\right)
++ \lambda_1 \sum_i F^{\mathrm{Prv}}_{ii}\left(\theta^{\mathrm{Exp}}_i - \theta^{\mathrm{Prv}}_i\right)^2 \\[2pt]
+& + \lambda_2 \left\lVert [\,W_{\mathrm{Exp}};\, W_{\mathrm{Prv}}\,] \right\rVert_{2,1}
++ \lambda_3 \left\lVert W_{\mathrm{Add}} \right\rVert_1 ,
+\end{aligned}
+\end{equation}
+where $\mathrm{FL}(\cdot)$ is the focal objective of Equation~(1). The expected benefits are twofold. First, each agent would learn its rare local attacks more reliably thanks to the focal weighting. Second, this rare-attack knowledge would then be propagated to the global model through federated distillation, which would make the whole system more robust to stealthy attacks. From a risk-management perspective, combining the two approaches minimizes two distinct risks at once: the risk of \emph{missing stealthy attacks}, addressed by the focal loss of Article~1, and the risk of \emph{technological obsolescence} against new attacks, addressed by the continual federated design of Article~2.
+
+These statements are design hypotheses. The interaction between the focal weighting and the Fisher regularization, the tuning of the trade-off coefficients $\lambda_1,\lambda_2,\lambda_3$, the non-iid distribution of data across agents, and the federated communication cost all remain open questions whose empirical study constitutes the natural follow-up of this work.
+
+\section{Conclusion}
+
+This scientific project allowed us to explore the state of the art in deep-learning intrusion detection. We first studied how the focal loss resolves the static problem of class imbalance, a necessary step toward reliable models. Aware of the limits of a frozen model, we then extended the study to a dynamic multi-agent framework that learns continuously without forgetting the past and collaborates without compromising data privacy. Merging the mathematical rigor of the first approach, an optimized cost function, with the resilient architecture of the second yields \emph{Federated Focal Continual Learning}, a promising research direction for securing the Internet of Things of tomorrow. Its empirical validation, on established IoT intrusion benchmarks under simulated drift and measured with the Matthews correlation coefficient, is left to future work.
+
+\begin{thebibliography}{9}
+\small
+\bibitem{dina} A. S. Dina, A. B. Siddique, and D. Manivannan, ``A deep learning approach for intrusion detection in Internet of Things using focal loss function,'' \emph{Internet of Things}, vol.~22, art.~100699, 2023.
+\bibitem{soltani} M. Soltani, K. Khajavi, M. J. Siavoshani, and A. H. Jahangir, ``A multi-agent adaptive deep learning framework for online intrusion detection,'' \emph{Cybersecurity}, vol.~7, no.~1, art.~9, 2024.
+\bibitem{lin} T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Doll\'ar, ``Focal loss for dense object detection,'' in \emph{Proc. IEEE Int. Conf. Computer Vision (ICCV)}, 2017, pp.~2980--2988.
+\bibitem{mcmahan} H. B. McMahan, E. Moore, D. Ramage, S. Hampson, and B. Ag\"uera y Arcas, ``Communication-efficient learning of deep networks from decentralized data,'' in \emph{Proc. AISTATS}, 2017, pp.~1273--1282.
+\bibitem{ewc} J. Kirkpatrick, R. Pascanu, N. Rabinowitz, \emph{et al.}, ``Overcoming catastrophic forgetting in neural networks,'' \emph{Proc. Natl. Acad. Sci. (PNAS)}, vol.~114, no.~13, pp.~3521--3526, 2017.
+\end{thebibliography}
+
+\end{document}
